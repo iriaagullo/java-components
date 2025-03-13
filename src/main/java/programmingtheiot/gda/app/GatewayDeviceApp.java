@@ -14,6 +14,8 @@ package programmingtheiot.gda.app;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import programmingtheiot.common.ConfigConst;
+import programmingtheiot.common.ConfigUtil;
 import programmingtheiot.gda.system.SystemPerformanceManager;
 /**
  * Main GDA application.
@@ -31,6 +33,7 @@ public class GatewayDeviceApp
 	
 	private SystemPerformanceManager sysPerfMgr =null;
 
+	private DeviceDataManager dataMgr = null;
 	// constructors
 	
 	/**
@@ -61,13 +64,31 @@ public class GatewayDeviceApp
 		
 		gwApp.startApp();
 		
-		try {
-			Thread.sleep(65000L);
-		} catch (InterruptedException e) {
+		// TODO: custom add to ConfigConst for convenience
+		boolean runForever =
+		ConfigUtil.getInstance().getBoolean(ConfigConst.GATEWAY_DEVICE,ConfigConst.ENABLE_RUN_FOREVER_KEY);
+
+		if (runForever) {
+			try {
+				// TODO: make the 2000L configurable
+				while (true) {
+					Thread.sleep(2000L);
+									}
+			}catch (InterruptedException e) {
+					// ignore
+								}
+
+					gwApp.stopApp(0);
+		}else {
+			try {
+			Thread.sleep(DEFAULT_TEST_RUNTIME);
+				}catch (InterruptedException e) {
 			// ignore
-		}
-		
-		gwApp.stopApp(0);
+						}
+
+			gwApp.stopApp(0);
+				}
+	
 	}
 	
 	
@@ -82,14 +103,16 @@ public class GatewayDeviceApp
 		_Logger.info("Starting GDA...");
 		
 		try {
-			// TODO: Your code here
-			if (this.sysPerfMgr.startManager()) {
-				_Logger.info("GDA started successfully.");
-			}else {
-				_Logger.warning("Failed to start system performance manager!");
+			if (!ConfigUtil.getInstance().getBoolean(ConfigConst.GATEWAY_DEVICE,ConfigConst.TEST_EMPTY_APP_KEY)) {
+				this.dataMgr =new DeviceDataManager();
+							}
 				
-				stopApp(-1);
-			}	
+				if (this.dataMgr !=null) {
+				this.dataMgr.startManager();
+							}
+
+			_Logger.info("GDA started successfully.");
+				
 		} catch (Exception e) {
 			_Logger.log(Level.SEVERE, "Failed to start GDA. Exiting.", e);
 			
@@ -107,21 +130,25 @@ public class GatewayDeviceApp
 		_Logger.info("Stopping GDA...");
 		
 		try {
-			// TODO: Your code here
-			if (this.sysPerfMgr.stopManager()) {
-				_Logger.log(Level.INFO, "GDA stopped successfully with exit code {0}.", code);
-			}else {
-				_Logger.warning("Failed to stop system performance manager!");
-						}
+			if (this.dataMgr !=null) {
+			this.dataMgr.stopManager();
+						}	
+		_Logger.log(Level.INFO, "GDA stopped successfully with exit code {0}.", code);
 
 		} catch (Exception e) {
 			_Logger.log(Level.SEVERE, "Failed to cleanly stop GDA. Exiting.", e);
 		}
 		
-		System.exit(code);
+		// Solo salir si no estamos en una prueba
+		if (!isRunningInTestMode()) {
+			System.exit(code);
+		}
 	}
 	
-	
+	// Método para detectar si estamos en un entorno de prueba
+	private boolean isRunningInTestMode() {
+		return System.getProperty("surefire.test.class.path") != null;
+	}
 	// private methods
 	
 	/**
