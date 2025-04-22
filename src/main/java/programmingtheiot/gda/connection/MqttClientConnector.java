@@ -74,6 +74,7 @@ public class MqttClientConnector implements IPubSubClient, MqttCallbackExtended
 			configUtil.getInteger(
 				ConfigConst.MQTT_GATEWAY_SERVICE, ConfigConst.KEEP_ALIVE_KEY, ConfigConst.DEFAULT_KEEP_ALIVE);
 
+		this.protocol = ConfigConst.DEFAULT_MQTT_PROTOCOL;
 		// This next config file boolean property is optional; it can be
 		// set within the [Mqtt.GatewayService] and [Cloud.GatewayService]
 		// sections of PiotConfig.props. You can use it to create a logical
@@ -101,7 +102,7 @@ public class MqttClientConnector implements IPubSubClient, MqttCallbackExtended
 		// these are specific to the MQTT connection which will be used during connect
 		this.persistence = new MemoryPersistence();
 		this.connOpts = new MqttConnectOptions();
-
+		
 		this.connOpts.setKeepAliveInterval(this.brokerKeepAlive);
 
 		// NOTE: If using a random clientID for each new connection,
@@ -114,7 +115,13 @@ public class MqttClientConnector implements IPubSubClient, MqttCallbackExtended
 		// NOTE: URL does not have a protocol handler for "tcp",
 		// so we need to construct the URL manually
 		this.brokerAddr = this.protocol + "://" + this.host + ":" + this.port;
-
+		
+		try {
+			this.mqttClient = new MqttClient(this.brokerAddr, this.clientID, this.persistence);
+			this.mqttClient.setCallback(this);
+		} catch (MqttException e) {
+			_Logger.log(Level.SEVERE, "Failed to create MQTT client: " + e.getMessage(), e);
+		}
 	}
 	
 	
@@ -218,21 +225,27 @@ public class MqttClientConnector implements IPubSubClient, MqttCallbackExtended
 	@Override
 	public void connectComplete(boolean reconnect, String serverURI)
 	{
+		_Logger.info("MQTT connection successful (is reconnect = " + reconnect + "). Broker: " + serverURI);
 	}
 
 	@Override
 	public void connectionLost(Throwable t)
 	{
+		_Logger.log(Level.WARNING, "Lost connection to MQTT broker: " + this.brokerAddr, t);
 	}
 	
 	@Override
 	public void deliveryComplete(IMqttDeliveryToken token)
 	{
+		// TODO: Logging level may need to be adjusted to see output in log file / console
+		_Logger.fine("Delivered MQTT message with ID: " + token.getMessageId());
 	}
 	
 	@Override
-	public void messageArrived(String topic, MqttMessage msg) throws Exception
+	public void messageArrived(String topic, MqttMessage message)
 	{
+		// TODO: Logging level may need to be adjusted to reduce output in log file / console
+		_Logger.info("MQTT message arrived on topic: '" + topic + "'");
 	}
 
 	
