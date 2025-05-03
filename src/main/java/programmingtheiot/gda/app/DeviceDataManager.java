@@ -40,7 +40,7 @@ public class DeviceDataManager implements IDataMessageListener
 	// private var's
 	
 	private boolean enableMqttClient = true;
-	private boolean enableCoapServer = false;
+	private boolean enableCoapServer = true;
 	private boolean enableCloudClient = false;
 	private boolean enableSmtpClient = false;
 	private boolean enablePersistenceClient = false;
@@ -202,6 +202,13 @@ public class DeviceDataManager implements IDataMessageListener
 			this.sysPerfMgr.startManager();
 		}
 
+		if (this.enableCoapServer && this.coapServer != null) {
+			if (this.coapServer.startServer()) {
+				_Logger.info("CoAP server started.");
+			} else {
+				_Logger.severe("Failed to start CoAP server. Check log file for details.");
+			}
+		}
 	}
 	
 	public void stopManager()
@@ -235,6 +242,14 @@ public class DeviceDataManager implements IDataMessageListener
 			}
 		}
 		
+		if (this.enableCoapServer && this.coapServer != null) {
+			if (this.coapServer.stopServer()) {
+				_Logger.info("CoAP server stopped.");
+			} else {
+				_Logger.severe("Failed to stop CoAP server. Check log file for details.");
+			}
+		}
+
 	}
 
 	
@@ -270,6 +285,7 @@ public class DeviceDataManager implements IDataMessageListener
 		}
 	
 		if (this.enableCoapServer) {
+			this.coapServer = new CoapServerGateway(this);
 			// TODO: implement this in Lab Module 8
 		}
 	
