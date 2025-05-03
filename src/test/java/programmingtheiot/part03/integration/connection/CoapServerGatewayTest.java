@@ -18,11 +18,9 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import programmingtheiot.common.ConfigConst;
 import programmingtheiot.common.DefaultDataMessageListener;
 import programmingtheiot.common.IDataMessageListener;
-import programmingtheiot.common.ResourceNameEnum;
-import programmingtheiot.gda.connection.*;
+import programmingtheiot.gda.connection.CoapServerGateway;
 
 /**
  * This test case class contains very basic integration tests for
@@ -76,7 +74,7 @@ public class CoapServerGatewayTest
 	@Test
 	public void testRunSimpleCoapServerGatewayIntegration()
 	{
-		try {
+		/*try {
 			String url =
 				ConfigConst.DEFAULT_COAP_PROTOCOL + "://" + ConfigConst.DEFAULT_HOST + ":" + ConfigConst.DEFAULT_COAP_PORT;
 			
@@ -99,7 +97,7 @@ public class CoapServerGatewayTest
 			
 			/*
 			 * NOTE: Change these to suit your own environment.
-			 */
+			 
 			
 			clientConn.setURI(
 				url + "/" + ConfigConst.PRODUCT_NAME);
@@ -120,6 +118,30 @@ public class CoapServerGatewayTest
 		} catch (Exception e) {
 			// ignore
 		}
+ 		*/
+		try {
+			String url ="coap://localhost:5683";
+			
+			this.csg = new CoapServerGateway(new DefaultDataMessageListener());// assumes the no-arg constructor will create all resources internally
+			this.csg.startServer();
+			
+			CoapClient clientConn =new CoapClient(url);
+			
+			Set<WebLink>wlSet =clientConn.discover();
+			
+			if (wlSet !=null) {
+			for (WebLink wl :wlSet) {
+			_Logger.info(" --> WebLink: " +wl.getURI() +". Attributes: " +wl.getAttributes());
+						}
+					}
+			
+			Thread.sleep(DEFAULT_TIMEOUT);// DEFAULT_TIMEOUT is in milliseconds - for instance, 120000 (2 minutes)
+			
+			this.csg.stopServer();
+				}catch (Exception e) {
+			// log a message!
+				}
+
 	}
 	
 }

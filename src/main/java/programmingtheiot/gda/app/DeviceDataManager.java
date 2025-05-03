@@ -169,6 +169,9 @@ public class DeviceDataManager implements IDataMessageListener
 	
 	public void setActuatorDataListener(String name, IActuatorDataListener listener)
 	{
+		if (listener != null) {
+			this.actuatorDataListener = listener;
+		}
 	}
 	
 	public void startManager()
@@ -300,6 +303,11 @@ public class DeviceDataManager implements IDataMessageListener
 
 	private void handleIncomingDataAnalysis(ResourceNameEnum resourceName, ActuatorData data)
 	{
+		if (!data.isResponseFlagEnabled()) {
+			if (this.actuatorDataListener != null) {
+				this.actuatorDataListener.onActuatorDataUpdate(data);
+			}
+		}
  	}
 
 	private void handleIncomingDataAnalysis(ResourceNameEnum resourceName, SensorData data)
