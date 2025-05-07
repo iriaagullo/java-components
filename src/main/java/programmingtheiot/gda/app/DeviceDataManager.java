@@ -9,6 +9,7 @@
 package programmingtheiot.gda.app;
 
 
+import java.time.OffsetDateTime;
 import java.util.logging.Logger;
 
 import programmingtheiot.common.ConfigConst;
@@ -17,6 +18,7 @@ import programmingtheiot.common.IActuatorDataListener;
 import programmingtheiot.common.IDataMessageListener;
 import programmingtheiot.common.ResourceNameEnum;
 import programmingtheiot.data.ActuatorData;
+import programmingtheiot.data.DataUtil;
 import programmingtheiot.data.SensorData;
 import programmingtheiot.data.SystemPerformanceData;
 import programmingtheiot.gda.connection.CoapServerGateway;
@@ -54,6 +56,22 @@ public class DeviceDataManager implements IDataMessageListener
 	private CoapServerGateway coapServer = null;
 	private SystemPerformanceManager sysPerfMgr = null;
 
+
+
+	private ActuatorData latestHumidifierActuatorData = null;
+	private ActuatorData latestHumidifierActuatorResponse = null;
+	private SensorData latestHumiditySensorData = null;
+	private OffsetDateTime latestHumiditySensorTimeStamp = null;
+
+	private boolean handleHumidityChangeOnDevice = false;
+	private int lastKnownHumidifierCommand = ConfigConst.OFF_COMMAND;
+
+	private long humidityMaxTimePastThreshold = 300;
+	private float nominalHumiditySetting = 40.0f;
+	private float triggerHumidifierFloor = 30.0f;
+	private float triggerHumidifierCeiling = 50.0f;
+
+
 	// constructors
 	
 	public DeviceDataManager()
@@ -76,6 +94,33 @@ public class DeviceDataManager implements IDataMessageListener
 		this.enablePersistenceClient =
 			configUtil.getBoolean(
 				ConfigConst.GATEWAY_DEVICE, ConfigConst.ENABLE_PERSISTENCE_CLIENT_KEY);
+
+		// TODO: add these to ConfigConst
+		this.handleHumidityChangeOnDevice =
+		configUtil.getBoolean(
+		ConfigConst.GATEWAY_DEVICE,"handleHumidityChangeOnDevice");
+
+		this.humidityMaxTimePastThreshold =
+		configUtil.getInteger(
+		ConfigConst.GATEWAY_DEVICE,"humidityMaxTimePastThreshold");
+
+		this.nominalHumiditySetting =
+		configUtil.getFloat(
+		ConfigConst.GATEWAY_DEVICE,"nominalHumiditySetting");
+
+		this.triggerHumidifierFloor =
+		configUtil.getFloat(
+		ConfigConst.GATEWAY_DEVICE,"triggerHumidifierFloor");
+
+		this.triggerHumidifierCeiling =
+		configUtil.getFloat(
+		ConfigConst.GATEWAY_DEVICE,"triggerHumidifierCeiling");
+
+		// TODO: basic validation for timing - add other validators for remaining values
+		if (this.humidityMaxTimePastThreshold <10 ||this.humidityMaxTimePastThreshold >7200) {
+			this.humidityMaxTimePastThreshold =300;
+		}
+		
 
 		initManager();
 	
@@ -144,7 +189,21 @@ public class DeviceDataManager implements IDataMessageListener
 			if (data.hasError()) {
 				_Logger.warning("Error flag set for SensorData instance.");
 			}
-	
+			String jsonData =DataUtil.getInstance().sensorDataToJson(data);
+
+			_Logger.fine("JSON [SensorData] -> " +jsonData);
+
+			// TODO: retrieve this from config file
+			int qos =ConfigConst.DEFAULT_QOS;
+
+			if (this.enablePersistenceClient &&this.persistenceClient !=null) {
+			this.persistenceClient.storeData(resourceName.getResourceName(),qos,data);
+					}
+
+			this.handleIncomingDataAnalysis(resourceName,data);
+
+			this.handleUpstreamTransmission(resourceName,jsonData,qos);
+
 			return true;
 		} else {
 			return false;
@@ -201,16 +260,17 @@ public class DeviceDataManager implements IDataMessageListener
 			}
 		}
 
-		if (this.sysPerfMgr != null) {
-			this.sysPerfMgr.startManager();
-		}
-
 		if (this.enableCoapServer && this.coapServer != null) {
 			if (this.coapServer.startServer()) {
 				_Logger.info("CoAP server started.");
 			} else {
 				_Logger.severe("Failed to start CoAP server. Check log file for details.");
 			}
+		}
+		
+
+		if (this.sysPerfMgr != null) {
+			this.sysPerfMgr.startManager();
 		}
 	}
 	
@@ -316,6 +376,9 @@ public class DeviceDataManager implements IDataMessageListener
 
 	private void handleUpstreamTransmission(ResourceNameEnum resourceName, String jsonData, int qos)
 	{
+		// NOTE: This will be implemented in Part 04
+		_Logger.info("TODO: Send JSON data to cloud service: " +resourceName);
+
 	}
 
 }
