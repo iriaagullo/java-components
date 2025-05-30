@@ -39,8 +39,14 @@ public class CloudClientConnector implements ICloudClient, IConnectionListener
 	private IDataMessageListener dataMsgListener = null;
 
 	// TODO: set to either 0 or 1, depending on which is preferred for your implementation
-	private int qosLevel = 1;
+	//private int qosLevel = 1;
 
+	private int qosLevel = ConfigUtil.getInstance().getInteger(
+		ConfigConst.CLOUD_GATEWAY_SERVICE, 
+		ConfigConst.DEFAULT_QOS_KEY, 
+		ConfigConst.DEFAULT_QOS);
+
+	boolean firstTimeConnected = true;
 	
 	// constructors
 	
@@ -117,10 +123,13 @@ public class CloudClientConnector implements ICloudClient, IConnectionListener
 		ad.setValue((float) -1.0); // NOTE: this just needs to be an invalid actuation value
 
 		String ledTopic = createTopicName(ledListener.getResource().getDeviceName(), ad.getName());
-		String adJson = DataUtil.getInstance().actuatorDataToJson(ad);
-
-		this.publishMessageToCloud(ledTopic, adJson);
-
+		if (firstTimeConnected) {
+			String adJson = DataUtil.getInstance().actuatorDataToJson(ad);
+			this.publishMessageToCloud(ledTopic, adJson);
+			firstTimeConnected = false;
+		} else {
+			_Logger.info("Not sending initial LED actuation command.");
+		}
 		this.mqttClient.subscribeToTopic(ledTopic, this.qosLevel, ledListener);
 	}
 
@@ -134,6 +143,11 @@ public class CloudClientConnector implements ICloudClient, IConnectionListener
 	@Override
 	public boolean setDataMessageListener(IDataMessageListener listener)
 	{
+		if (listener != null) {
+			this.dataMsgListener = listener;
+			//this.mqttClient.setDataMessageListener(listener);
+			return true;
+		}
 		return false;
 	}
 
@@ -271,6 +285,7 @@ public class CloudClientConnector implements ICloudClient, IConnectionListener
 		try {
 			_Logger.finest("Publishing payload value(s) to CSP: " + topicName);
 
+			payload = DataUtil.getInstance().payloadToCloudPayload(payload);
 			this.mqttClient.publishMessage(topicName, payload.getBytes(), this.qosLevel);
 
 			// NOTE: Depending on the cloud service, it may be necessary to 'throttle'
@@ -301,11 +316,15 @@ public class CloudClientConnector implements ICloudClient, IConnectionListener
 
 		return false;
 	}
+}
 
 
-
-	private class LedEnablementMessageListener implements IMqttMessageListener
+	class LedEnablementMessageListener implements IMqttMessageListener
 	{
+		private static final Logger _Logger =
+		Logger.getLogger(LedEnablementMessageListener.class.getName());
+
+
 		private IDataMessageListener dataMsgListener = null;
 
 		private ResourceNameEnum resource = ResourceNameEnum.CDA_ACTUATOR_CMD_RESOURCE;
@@ -328,6 +347,8 @@ public class CloudClientConnector implements ICloudClient, IConnectionListener
 		{
 			try {
 				String jsonData = new String(message.getPayload());
+
+				jsonData = DataUtil.getInstance().cloudPayloadToPayload(jsonData);
 
 				ActuatorData actuatorData =
 					DataUtil.getInstance().jsonToActuatorData(jsonData);
@@ -402,6 +423,8 @@ public class CloudClientConnector implements ICloudClient, IConnectionListener
 				//	this.dataMsgListener.handleActuatorCommandRequest(
 				//		ResourceNameEnum.CDA_ACTUATOR_CMD_RESOURCE, actuatorData);
 				//}
+
+
 			} catch (Exception e) {
 			_Logger.warning("Failed to convert message payload to ActuatorData.");
 			}
@@ -409,7 +432,9 @@ public class CloudClientConnector implements ICloudClient, IConnectionListener
 	}
 
 
-}
+
+
+
 
 
 
