@@ -9,12 +9,11 @@
 
 package programmingtheiot.part04.integration.connection;
 
-import static org.junit.Assert.*;
-
 import java.util.List;
 import java.util.logging.Logger;
 
 import org.junit.After;
+import static org.junit.Assert.assertTrue;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -24,7 +23,8 @@ import programmingtheiot.common.ResourceNameEnum;
 import programmingtheiot.data.SensorData;
 import programmingtheiot.data.SystemPerformanceData;
 import programmingtheiot.gda.app.DeviceDataManager;
-import programmingtheiot.gda.connection.*;
+import programmingtheiot.gda.connection.CloudClientConnector;
+import programmingtheiot.gda.connection.ICloudClient;
 
 /**
  * This test case class contains very basic integration tests for
@@ -199,4 +199,75 @@ public class CloudClientConnectorTest
 		}
 	}
 	
+
+	@Test
+	public void testPublishSensorData()
+	{
+		 this.cloudClient.setDataMessageListener(new DefaultDataMessageListener());
+		 
+		 assertTrue(this.cloudClient.connectClient());
+		 
+		 try {
+			 // sleep for a couple of seconds or so...
+			 
+			 Thread.sleep(30000L);
+		 } catch (Exception e) {
+			 // ignore
+		 }
+		 SensorData sensorData = new SensorData();
+		 sensorData.setName(ConfigConst.TEMP_SENSOR_NAME);
+		 sensorData.setValue(50.0f);
+		 sensorData.setLatitude(2.1f);
+		 assertTrue(this.cloudClient.sendEdgeDataToCloud(ResourceNameEnum.CDA_SENSOR_MSG_RESOURCE, sensorData));
+ 
+		 assertTrue(this.cloudClient.disconnectClient());
+		 
+		 _Logger.info("Test complete.");
+	}	
+ 
+	@Test
+	public void testLedActuator(){
+		 this.cloudClient.setDataMessageListener(new DefaultDataMessageListener());
+		 
+		 assertTrue(this.cloudClient.connectClient());
+		 
+		 try {
+			 // sleep for a couple of seconds or so...
+			 
+			 Thread.sleep(20000L);
+		 } catch (Exception e) {
+			 // ignore
+		 }
+		 
+		 // in Ubidots, there is an event which sends LED_ON when the value of sensorDara > 50.
+		 // First send a value lower than 50, to reset the event trigger.
+		 SensorData sensorData = new SensorData();
+		 sensorData.setName(ConfigConst.TEMP_SENSOR_NAME);
+		 sensorData.setValue(30.0f);
+		 assertTrue(this.cloudClient.sendEdgeDataToCloud(ResourceNameEnum.CDA_SENSOR_MSG_RESOURCE, sensorData));
+ 
+		 // Now send a value higher than 50, to trigger the event.
+		 sensorData = new SensorData();
+		 sensorData.setName(ConfigConst.TEMP_SENSOR_NAME);
+		 sensorData.setValue(51.0f);
+		 
+		 assertTrue(this.cloudClient.sendEdgeDataToCloud(ResourceNameEnum.CDA_SENSOR_MSG_RESOURCE, sensorData));
+		 // Now we should see : "INFORMACIÓN: Received LED enablement message [ON]."
+		 try {
+			 // sleep for a couple of seconds or so...
+			 
+			 Thread.sleep(20000L);
+		 } catch (Exception e) {
+			 // ignore
+		 }
+		 assertTrue(this.cloudClient.disconnectClient());
+		 
+		 _Logger.info("Test complete.");
+	}
+ 
+	@Test
+	public void testGDA(){
+		 
+	}
+
 }

@@ -23,6 +23,7 @@ import programmingtheiot.data.BaseIotData;
 import programmingtheiot.data.DataUtil;
 import programmingtheiot.data.SensorData;
 import programmingtheiot.data.SystemPerformanceData;
+import programmingtheiot.gda.connection.CloudClientConnector;
 import programmingtheiot.gda.connection.CoapServerGateway;
 import programmingtheiot.gda.connection.IPersistenceClient;
 import programmingtheiot.gda.connection.IPubSubClient;
@@ -45,14 +46,14 @@ public class DeviceDataManager implements IDataMessageListener
 	
 	private boolean enableMqttClient = true;
 	private boolean enableCoapServer = false;
-	private boolean enableCloudClient = false;
+	private boolean enableCloudClient =false;
 	private boolean enableSmtpClient = false;
 	private boolean enablePersistenceClient = false;
 	private boolean enableSystemPerf = false;
 
 	private IActuatorDataListener actuatorDataListener = null;
 	private IPubSubClient mqttClient = null;
-	private IPubSubClient cloudClient = null;
+	private CloudClientConnector cloudClient = null;
 	private IPersistenceClient persistenceClient = null;
 	private IRequestResponseClient smtpClient = null;
 	private CoapServerGateway coapServer = null;
@@ -122,7 +123,6 @@ public class DeviceDataManager implements IDataMessageListener
 		if (this.humidityMaxTimePastThreshold <10 ||this.humidityMaxTimePastThreshold >7200) {
 			this.humidityMaxTimePastThreshold =300;
 		}
-		
 
 		initManager();
 	
@@ -143,7 +143,7 @@ public class DeviceDataManager implements IDataMessageListener
         this.enableCloudClient = enableCloudClient;
         this.enablePersistenceClient = enablePersistenceClient;
 
-		
+
 		initManager();
 	}
 	
@@ -173,20 +173,31 @@ public class DeviceDataManager implements IDataMessageListener
 	public boolean handleActuatorCommandRequest(ResourceNameEnum resourceName, ActuatorData data)
 	{
 		if (data != null) {
-            _Logger.info("Handling actuator command request: " + data.getName());
+			// NOTE: Feel free to update this log message for debugging and monitoring
+			_Logger.log(
+				Level.FINE,
+				"Actuator request received: {0}. Message: {1}",
+				new Object[] {resourceName.getResourceName(), Integer.valueOf((data.getCommand()))});
 
-            if (data.hasError()) {
-                _Logger.warning("Error flag set for ActuatorData instance.");
-            }
+			if (data.hasError()) {
+				_Logger.warning("Error flag set for ActuatorData instance.");
+			}
 
-            if (this.actuatorDataListener != null) {
-                this.actuatorDataListener.onActuatorDataUpdate(data);
-            }
+			// TODO: retrieve this from config file
+			int qos = ConfigConst.DEFAULT_QOS;
 
-            return true;
-        } else {
-            return false;
-        }
+			// TODO: you may want to implement some analysis logic here or
+			// in a separate method to determine how best to handle incoming
+			// ActuatorData before calling this.sendActuatorCommandtoCda()
+
+			// Recall that this private method was implement in Lab Module 10
+			// See PIOT-GDA-10-003 for details
+			this.sendActuatorCommandtoCda(resourceName, data);
+
+			return true;
+		} else {
+			return false;
+		}
 	}
 
 	@Override
@@ -248,7 +259,8 @@ public class DeviceDataManager implements IDataMessageListener
 
 			this.handleIncomingDataAnalysis(resourceName,data);
 
-			this.handleUpstreamTransmission(resourceName,jsonData,qos);
+			this.handleUpstreamTransmission(resourceName,data,qos);
+
 
 			return true;
 		} else {
@@ -266,6 +278,21 @@ public class DeviceDataManager implements IDataMessageListener
 				_Logger.warning("Error flag set for SystemPerformanceData instance.");
 			}
 	
+			// Convertir SystemPerformanceData a JSON
+			String jsonData = DataUtil.getInstance().systemPerformanceDataToJson(data);
+
+			_Logger.fine("JSON [SystemPerformanceData] -> " + jsonData);
+			// TODO: retrieve this from config file
+			int qos = ConfigConst.DEFAULT_QOS;
+
+			// NOTE: You may want to persist your SystemPerformanceData here
+
+			if (this.enablePersistenceClient && this.persistenceClient != null) {
+				this.persistenceClient.storeData(resourceName.getResourceName(), qos, data);
+			}
+			// NOTE: You may want to also analyze the SystemPerformanceData here
+			this.handleUpstreamTransmission(resourceName, data, qos);
+
 			return true;
 		} else {
 			return false;
@@ -315,6 +342,11 @@ public class DeviceDataManager implements IDataMessageListener
 		}
 		
 
+		if (this.enableCloudClient && this.cloudClient != null) {
+			this.cloudClient.connectClient();
+		}
+
+
 		if (this.sysPerfMgr != null) {
 			this.sysPerfMgr.startManager();
 		}
@@ -358,6 +390,14 @@ public class DeviceDataManager implements IDataMessageListener
 				_Logger.severe("Failed to stop CoAP server. Check log file for details.");
 			}
 		}
+
+		if (this.enableCloudClient && this.cloudClient != null) {
+				this.cloudClient.disconnectClient();
+			}
+			if (this.sysPerfMgr != null) {
+				this.sysPerfMgr.stopManager();
+			}
+
 
 	}
 
@@ -560,11 +600,36 @@ public class DeviceDataManager implements IDataMessageListener
 	//{
 	//}
 
-	private void handleUpstreamTransmission(ResourceNameEnum resourceName, String jsonData, int qos)
+	private boolean handleUpstreamTransmission(ResourceNameEnum resourceName, SensorData data, int qos)
 	{
-		// NOTE: This will be implemented in Part 04
-		_Logger.info("TODO: Send JSON data to cloud service: " +resourceName);
+		_Logger.info("Sending Json data to cloud: " + resourceName.toString());
+		if (this.cloudClient != null) {
+			if (this.cloudClient.sendEdgeDataToCloud(resourceName, data)) {
+				_Logger.info("Published data to cloud: " + resourceName.toString());
+				return true;
+			} else {
+				_Logger.warning("Failed to publish data to cloud: " + resourceName.toString());
+			}
+		} else {
+			_Logger.warning("Cloud client is not enabled. Cannot publish data.");
+		}
+		return false;
+	}
 
+	private boolean handleUpstreamTransmission(ResourceNameEnum resourceName, SystemPerformanceData data, int qos)
+	{
+		_Logger.info("Sending Json data to cloud: " + resourceName.toString());
+		if (this.cloudClient != null) {
+			if (this.cloudClient.sendEdgeDataToCloud(resourceName, data)) {
+				_Logger.info("Published data to cloud: " + resourceName.toString());
+				return true;
+			} else {
+				_Logger.warning("Failed to publish data to cloud: " + resourceName.toString());
+			}
+		} else {
+			_Logger.warning("Cloud client is not enabled. Cannot publish data.");
+		}
+		return false;
 	}
 
 }

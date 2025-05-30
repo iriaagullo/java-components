@@ -2,5 +2,4 @@
 /target/
 **/cert
 **/cred
-connecteddevices/cred/UbidotsCloudCred.props
-connecteddevices/cert/UbidotsCloudCert.pem
+
